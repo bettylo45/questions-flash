@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Question Flash — Automatismes</title>
+<style>
+:root{--navy:#253777;--purple:#6d28d9;--blue:#2563eb;--green:#059669;--bg:#f5f7fb;--ink:#18213b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink)}
+main{max-width:760px;margin:24px auto;padding:0 14px 32px}.hero{background:var(--navy);color:white;padding:22px;border-radius:20px 20px 0 0}.hero h1{margin:0;font-size:1.55rem}.hero p{margin:5px 0 0;color:#dce5ff}
+.panel{background:white;padding:18px;border:1px solid #e1e6f0;border-radius:0 0 20px 20px;box-shadow:0 8px 25px #1e2a4b0c}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}.tabs{display:flex;gap:8px;margin-bottom:16px}.tabs button{flex:1}.btn{border:0;border-radius:11px;padding:11px 14px;font-weight:650;cursor:pointer;background:var(--navy);color:white}.btn.secondary{background:#eef1f8;color:#26345e}.btn.green{background:var(--green)}.btn.outline{background:white;color:var(--navy);border:1px solid #cbd3e4}.btn:disabled{opacity:.45;cursor:not-allowed}
+.card{border:2px solid var(--purple);border-radius:18px;padding:20px 16px;min-height:330px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;cursor:pointer;background:linear-gradient(180deg,#fff,#faf9ff)}
+.pill{font-size:.85rem;font-weight:700;padding:5px 10px;border-radius:99px;background:#eee8ff;color:var(--purple)}.question{font-size:1.22rem;font-weight:700;max-width:570px}.answer{font-size:1.4rem;font-weight:800;color:var(--green)}.explain{max-width:570px}.muted{color:#65708b;font-size:.9rem}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1}
+svg{max-width:100%;width:310px;height:200px;overflow:visible}.table-wrap{width:100%;overflow-x:auto}table{border-collapse:collapse;margin:auto;min-width:260px}th,td{border:1px solid #ccd4e5;padding:8px 10px;text-align:center}th{background:#f0f2fb}
+.progress{height:7px;background:#e8ebf3;border-radius:20px;overflow:hidden;margin:12px 0}.progress span{display:block;height:100%;background:var(--green);width:0}
+@media(max-width:520px){main{margin:0 auto;padding:0}.hero,.panel{border-radius:0}.panel{padding:14px}.question{font-size:1.1rem}.card{padding:16px 10px;min-height:320px}.actions{flex-wrap:wrap}}
+</style></head>
+<body><main>
+<header class="hero"><h1>Question Flash</h1><p>Automatismes de mathématiques · Entraînement autonome</p></header>
+<section class="panel">
+<div class="tabs"><button class="btn" id="s1">Série 1</button><button class="btn secondary" id="s2">Série 2</button></div>
+<div class="row"><strong id="seriesTitle">Question Flash — Série 1</strong><span class="muted" id="counter">Question 1 / 3</span></div>
+<div class="progress"><span id="progress"></span></div>
+<div class="card" id="flash" role="button" tabindex="0" aria-label="Retourner la carte">
+<span class="pill" id="kind">Pythagore</span><div id="visual"></div><div class="question" id="question"></div><div class="muted" id="hint">Clique sur la carte pour voir la correction.</div><div id="answer" hidden></div>
+</div>
+<div class="actions"><button class="btn secondary" id="prev">← Précédente</button><button class="btn" id="flip">Voir la réponse</button><button class="btn secondary" id="next">Suivante →</button></div>
+<div class="actions"><button class="btn green" id="known">✓ Je savais</button><button class="btn outline" id="review">↻ À revoir</button></div>
+<div class="row" style="margin-top:16px"><span class="muted" id="score">Cartes évaluées : 0 / 3</span><button class="btn outline" id="new">Nouvelle série aléatoire</button></div>
+<p class="muted">Chaque série contient exactement 3 questions. Les cartes se retournent au clic ; les réponses restent exactes et les données sont renouvelées à chaque nouvelle série.</p>
+</section></main>
+<script>
+const $=id=>document.getElementById(id);
+let series=1, idx=0, revealed=false, deck=[], marks={};
+const vertexSets=[['A','B','C'],['D','E','F'],['G','H','I'],['M','N','P'],['R','S','T'],['U','V','W'],['K','L','M']];
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function shuffle(a){return a.sort(()=>Math.random()-.5)}
+function triangleSVG(names, rightIndex=0){
+ // Right-angle vertex is the bottom-left point. Only vertex labels are displayed.
+ return `<svg viewBox="0 0 300 190" role="img" aria-label="Triangle rectangle avec sommets nommés"><path d="M55 150 L55 28 L250 150 Z" fill="#eee9ff" stroke="#6d28d9" stroke-width="2.5" stroke-linejoin="round"/><path d="M55 134 L71 134 L71 150" fill="none" stroke="#6d28d9" stroke-width="2"/><text x="39" y="168" font-size="15" fill="currentColor">${names[0]}</text><text x="39" y="21" font-size="15" fill="currentColor">${names[1]}</text><text x="258" y="168" font-size="15" fill="currentColor">${names[2]}</text></svg>`;
+}
+function pythQuestion(){
+ // All actual side lengths are <=12. Exact irrational results are deliberately included.
+ let candidates=[];
+ for(let a=1;a<=11;a++) for(let b=1;b<=11;b++) if(a*a+b*b<=144 && a*a+b*b>0) candidates.push({mode:'hyp',a,b,r:a*a+b*b});
+ for(let c=2;c<=12;c++) for(let a=1;a<c;a++) if(c*c-a*a<=144) candidates.push({mode:'leg',a,c,r:c*c-a*a});
+ const p=pick(candidates), names=pick(vertexSets);
+ let q,ans,ex;
+ if(p.mode==='hyp'){
+  q=`Le triangle ${names[0]}${names[1]}${names[2]} est rectangle en ${names[0]}. Calculer la longueur exacte de ${names[1]}${names[2]}.`;
+  ans=`${names[1]}${names[2]} = ${root(p.r)}`;
+  ex=`${names[1]}${names[2]}² = ${p.a}² + ${p.b}² = ${p.a*p.a} + ${p.b*p.b} = ${p.r}.<br>Donc ${names[1]}${names[2]} = √${p.r}.`;
+ } else {
+  q=`Le triangle ${names[0]}${names[1]}${names[2]} est rectangle en ${names[0]}. L’hypoténuse mesure ${p.c} cm et un autre côté ${p.a} cm. Calculer la longueur exacte du troisième côté.`;
+  ans=`Longueur cherchée = ${root(p.r)} cm`;
+  ex=`Différence des carrés : ${p.c}² − ${p.a}² = ${p.c*p.c} − ${p.a*p.a} = ${p.r}.<br>La longueur cherchée est donc √${p.r} cm.`;
+ }
+ return {type:'Pythagore',color:'#6d28d9',q,ans,ex,visual:triangleSVG(names)};
+}
+function root(n){let r=Math.sqrt(n);return Number.isInteger(r)?String(r):`√${n}`}
+function freqQuestion(){
+ const rows=pick([
+  [['À pied',8],['Bus',6],['Vélo',4],['Voiture',2]],
+  [['Football',12],['Basket',6],['Tennis',4],['Danse',2]],
+  [['1 livre lu',4],['2 livres lus',8],['3 livres lus',6],['4 livres lus',2]],
+  [['Chat',8],['Chien',6],['Lapin',4],['Poisson',2]],
+  [['Pomme',5],['Banane',10],['Orange',5],['Poire',5]]
+ ]);
+ const target=Math.floor(Math.random()*rows.length), total=rows.reduce((s,r)=>s+r[1],0), n=rows[target][1];
+ const table=`<div class="table-wrap"><table><thead><tr><th>Valeur</th><th>Effectif</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}<tr><th>Total</th><th>${total}</th></tr></tbody></table></div>`;
+ return {type:'Fréquence',color:'#059669',q:`Déterminer la fréquence de « ${rows[target][0]} » sous forme d’une proportion.`,ans=`${n}/${total}`,ex:`Fréquence = effectif de la catégorie / effectif total = ${n}/${total}.`,visual:table};
+}
+function percentQuestion(){
+ const rate=pick([10,20,25,50,75]);let n;
+ if(rate===10)n=pick([20,30,40,50,60,70,80,90]);
+ if(rate===20)n=pick([25,30,35,40,45,50,55,60,65,70,75,80,85,90,95]);
+ if(rate===25)n=pick([20,24,28,32,36,40,44,48,52,60,64,72,84,92,96]);
+ if(rate===50)n=pick([24,36,42,54,62,74,86,98]);
+ if(rate===75)n=pick([20,28,36,44,52,60,64,72,84,92,96]);
+ const val=rate*n/100;
+ const how=rate===10?`${n} ÷ 10`:rate===20?`2 × (${n} ÷ 10)`:rate===25?`${n} ÷ 4`:rate===50?`${n} ÷ 2`:`(${n} ÷ 4) × 3`;
+ return {type:'Pourcentage',color:'#2563eb',q:`Calculer ${rate} % de ${n}.`,ans:String(val).replace('.',','),ex:`${rate} % de ${n} = ${how} = ${String(val).replace('.',',')}.`,visual:'<div style="font-size:3rem;color:#2563eb;font-weight:800">%</div>'};
+}
+function trigRatio(){
+ const names=pick(vertexSets), ratio=pick(['sin','cos','tan']), angle=names[1];
+ let expression=ratio==='sin'?`sin(∠${names[1]}${names[0]}${names[2]}) = ${names[2]}${names[0]} / ${names[2]}${names[1]}`:
+ ratio==='cos'?`cos(∠${names[1]}${names[0]}${names[2]}) = ${names[1]}${names[0]} / ${names[2]}${names[1]}`:
+ `tan(∠${names[1]}${names[0]}${names[2]}) = ${names[2]}${names[0]} / ${names[1]}${names[0]}`;
+ // angle at the top vertex, right angle at first vertex
+ const q=`Le triangle ${names[0]}${names[1]}${names[2]} est rectangle en ${names[0]}. Exprimer ${ratio}(${names[1]}${names[0]}${names[2]} avec un chapeau) à l’aide des longueurs des côtés.`;
+ const formula=ratio==='sin'?`sin(∠${names[1]}${names[0]}${names[2]}) = ${names[2]}${names[0]} / ${names[1]}${names[2]}`:ratio==='cos'?`cos(∠${names[1]}${names[0]}${names[2]}) = ${names[0]}${names[1]} / ${names[1]}${names[2]}`:`tan(∠${names[1]}${names[0]}${names[2]}) = ${names[2]}${names[0]} / ${names[0]}${names[1]}`;
+ return {type:'Trigonométrie',color:'#6d28d9',q,ans:formula,ex:ratio==='sin'?'Le sinus = côté opposé / hypoténuse.':ratio==='cos'?'Le cosinus = côté adjacent / hypoténuse.':'La tangente = côté opposé / côté adjacent.',visual:triangleSVG(names)};
+}
+function formulaQuestion(){
+ const names=pick(vertexSets), choice=pick(['sin','cos','tan']), angle=pick([30,35,40,45,50,60]);
+ let known,find;
+ if(choice==='sin'){known=`${names[1]}${names[2]}`;find=`${names[0]}${names[2]}`;}
+ else if(choice==='cos'){known=`${names[0]}${names[1]}`;find=`${names[1]}${names[2]}`;}
+ else {known=`${names[0]}${names[1]}`;find=`${names[0]}${names[2]}`;}
+ const q=`Le triangle ${names[0]}${names[1]}${names[2]} est rectangle en ${names[0]}. On connaît l’angle ${names[1]}${names[0]}${names[2]} = ${angle}° et la longueur ${known}. On cherche ${find}. Quelle formule utiliser ?`;
+ const ans=choice==='sin'?`sin(∠${names[1]}${names[0]}${names[2]}) = ${find} / ${names[1]}${names[2]}`:choice==='cos'?`cos(∠${names[1]}${names[0]}${names[2]}) = ${names[0]}${names[1]} / ${names[1]}${names[2]}`:`tan(∠${names[1]}${names[0]}${names[2]}) = ${names[0]}${names[2]} / ${names[0]}${names[1]}`;
+ return {type:'Choix de formule',color:'#2563eb',q,ans,ex:'Repère le côté opposé, le côté adjacent et l’hypoténuse par rapport à l’angle connu, puis choisis le rapport correspondant.',visual:triangleSVG(names)};
+}
+function primeQuestion(){
+ const composites=[];for(let n=4;n<100;n++){let prime=true;for(let d=2;d*d<=n;d++)if(n%d===0){prime=false;break}if(!prime)composites.push(n)}
+ const n=pick(composites);let x=n,f=[];for(let d=2;d<=x;d++)while(x%d===0){f.push(d);x/=d}
+ const counts={};f.forEach(v=>counts[v]=(counts[v]||0)+1);
+ const ans=Object.entries(counts).map(([p,k])=>k===1?p:`${p}^${k}`).join(' × ');
+ return {type:'Facteurs premiers',color:'#059669',q:`Décomposer ${n} en produit de facteurs premiers.`,ans:`${n} = ${ans}`,ex:`On divise successivement par des nombres premiers jusqu’à obtenir uniquement des facteurs premiers.`,visual:'<div style="font-size:3rem;color:#059669;font-weight:800">n → facteurs premiers</div>'};
+}
+function newDeck(s=series){
+ series=s;idx=0;revealed=false;marks={};
+ deck=s===1?[pythQuestion(),freqQuestion(),percentQuestion()]:[trigRatio(),formulaQuestion(),primeQuestion()];
+ $('s1').className='btn '+(s===1?'':'secondary');$('s2').className='btn '+(s===2?'':'secondary');
+ $('seriesTitle').textContent=`Question Flash — Série ${s}`;render();
+}
+function render(){
+ const c=deck[idx];$('counter').textContent=`Question ${idx+1} / 3`;$('progress').style.width=`${(idx+1)/3*100}%`;
+ $('kind').textContent=c.type;$('kind').style.color=c.color;$('kind').style.background=c.color+'18';
+ $('visual').innerHTML=c.visual;$('question').textContent=c.q;$('answer').hidden=!revealed;
+ $('answer').innerHTML=`<div class="answer">${c.ans}</div><div class="explain">${c.ex}</div>`;$('hint').textContent=revealed?'Correction':'Clique sur la carte pour voir la correction.';
+ $('flash').style.borderColor=c.color;$('flip').textContent=revealed?'Revoir la question':'Voir la réponse';
+ $('score').textContent=`Cartes évaluées : ${Object.keys(marks).length} / 3`;
+ $('known').disabled=!revealed;$('review').disabled=!revealed;
+}
+function flip(){revealed=!revealed;render()}
+function mark(v){if(!revealed)return;marks[idx]=v;if(idx<2){idx++;revealed=false}render()}
+$('s1').onclick=()=>newDeck(1);$('s2').onclick=()=>newDeck(2);$('flash').onclick=flip;$('flash').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flip()}};
+$('flip').onclick=flip;$('prev').onclick=()=>{idx=(idx+2)%3;revealed=false;render()};$('next').onclick=()=>{idx=(idx+1)%3;revealed=false;render()};
+$('known').onclick=()=>mark(true);$('review').onclick=()=>mark(false);$('new').onclick=()=>newDeck(series);
+newDeck(1);
+</script></body></html>
